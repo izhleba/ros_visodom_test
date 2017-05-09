@@ -1,0 +1,3 @@
+/home/izhleba/hdd/ws/libviso2/CMakeFiles/edit_cache.dir
+/home/izhleba/hdd/ws/libviso2/CMakeFiles/rebuild_cache.dir
+/home/izhleba/hdd/ws/libviso2/CMakeFiles/viso2.dir

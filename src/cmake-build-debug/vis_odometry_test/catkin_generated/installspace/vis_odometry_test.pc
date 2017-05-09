@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: vis_odometry_test
+Description: Description of vis_odometry_test
+Version: 0.0.0
+Cflags: 
+Libs: -L/usr/local/lib 
+Requires: 

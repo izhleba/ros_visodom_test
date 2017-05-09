@@ -1,0 +1,253 @@
+#include <ros/ros.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <nav_msgs/Odometry.h>
+
+#include <fstream>
+#include <boost/format.hpp>
+
+#include "tf/tfMessage.h"
+
+#include <tf/tf.h>
+
+ros::Publisher transformExpPub;
+ros::Subscriber tfExpSub;
+
+double lastExpectedTime = -1;
+tf::Vector3 lastExpectedPos;
+tf::Quaternion lastExpectedRot;
+
+double lastActualTime = -1;
+tf::Vector3 lastActualPos;
+tf::Quaternion lastActualRot;
+
+std::ofstream outFile;
+
+std::string actual_tf_frame_id;
+std::string expected_tf_frame_id;
+
+double posXErrSum = 0.0;
+double posYErrSum = 0.0;
+double posZErrSum = 0.0;
+double orientXErrSum = 0.0;
+double orientYErrSum = 0.0;
+double orientZErrSum = 0.0;
+double orientWErrSum = 0.0;
+
+double counterPosX = 0;
+double counterPosY = 0;
+double counterPosZ = 0;
+double counterOrientX = 0;
+double counterOrientY = 0;
+double counterOrientZ = 0;
+double counterOrientW = 0;
+
+geometry_msgs::TransformStampedPtr findTf(const tf::tfMessageConstPtr msg, std::string frame_id) {
+    geometry_msgs::TransformStampedPtr ptr = nullptr;
+    for (int i = 0; i < msg->transforms.size(); i++) {
+        geometry_msgs::TransformStamped trans = msg->transforms[i];
+        if (trans.header.frame_id.compare(frame_id) == 0) {
+            ptr.reset(new geometry_msgs::TransformStamped(trans));
+        }
+    }
+    return ptr;
+}
+
+callbackTO
+
+void callbackOdometryOdometry(const nav_msgs::OdometryConstPtr &expectedMsg,
+                const nav_msgs::OdometryConstPtr &actualMsg) {
+    double expectedTime = expectedMsg->header.stamp.toSec();
+    double actualTime = actualMsg->header.stamp.toSec();
+    tf::Vector3 expectedPos(expectedMsg->pose.pose.position.x,
+                            expectedMsg->pose.pose.position.y,
+                            expectedMsg->pose.pose.position.z);
+    tf::Quaternion expectedRot(expectedMsg->pose.pose.orientation.x,
+                               expectedMsg->pose.pose.orientation.y,
+                               expectedMsg->pose.pose.orientation.z,
+                               expectedMsg->pose.pose.orientation.w);
+    tf::Vector3 actualPos(actualMsg->pose.pose.position.x,
+                          actualMsg->pose.pose.position.y,
+                          actualMsg->pose.pose.position.z);
+    tf::Quaternion actualRot(actualMsg->pose.pose.orientation.x,
+                             actualMsg->pose.pose.orientation.y,
+                             actualMsg->pose.pose.orientation.z,
+                             actualMsg->pose.pose.orientation.w);
+    handleError(expectedTime, expectedPos, expectedRot, actualTime, actualPos, actualRot);
+}
+
+//void callbackTO(const geometry_msgs::TransformStampedConstPtr &expectedMsg,
+//                const nav_msgs::OdometryConstPtr &actualMsg) {
+//        double expectedTime = expectedMsg->header.stamp.toSec();
+//        double actualTime = actualMsg->header.stamp.toSec();
+//        tf::Vector3 expectedPos(expectedMsg->transform.translation.x,
+//                                expectedMsg->transform.translation.y,
+//                                expectedMsg->transform.translation.z);
+//        tf::Quaternion expectedRot(expectedMsg->transform.rotation.x,
+//                                   expectedMsg->transform.rotation.y,
+//                                   expectedMsg->transform.rotation.z,
+//                                   expectedMsg->transform.rotation.w);
+//        tf::Vector3 actualPos(actualMsg->pose.pose.position.x,
+//                              actualMsg->pose.pose.position.y,
+//                              actualMsg->pose.pose.position.z);
+//        tf::Quaternion actualRot(actualMsg->pose.pose.orientation.x,
+//                                 actualMsg->pose.pose.orientation.y,
+//                                 actualMsg->pose.pose.orientation.z,
+//                                 actualMsg->pose.pose.orientation.w);
+//        handleError(expectedTime, expectedPos, expectedRot, actualTime, actualPos, actualRot);
+//}
+
+//void callbackOT(const nav_msgs::OdometryConstPtr &expectedMsg,
+//                const tf::tfMessageConstPtr &actualMsg) {
+//    geometry_msgs::TransformStampedPtr transform = findTf(actualMsg, actual_tf_frame_id);
+//    if (transform) {
+//        double expectedTime = expectedMsg->header.stamp.toSec();
+//        double actualTime = transform->header.stamp.toSec();
+//        tf::Vector3 expectedPos(expectedMsg->pose.pose.position.x,
+//                                expectedMsg->pose.pose.position.y,
+//                                expectedMsg->pose.pose.position.z);
+//        tf::Quaternion expectedRot(expectedMsg->pose.pose.orientation.x,
+//                                   expectedMsg->pose.pose.orientation.y,
+//                                   expectedMsg->pose.pose.orientation.z,
+//                                   expectedMsg->pose.pose.orientation.w);
+//        tf::Vector3 actualPos(transform->transform.translation.x,
+//                              transform->transform.translation.y,
+//                              transform->transform.translation.z);
+//        tf::Quaternion actualRot(transform->transform.rotation.x,
+//                                 transform->transform.rotation.y,
+//                                 transform->transform.rotation.z,
+//                                 transform->transform.rotation.w);
+//        handleError(expectedTime, expectedPos, expectedRot, actualTime, actualPos, actualRot);
+//    } else {
+//        ROS_ERROR_STREAM("Cant find frame_id: " << actual_tf_frame_id);
+//    }
+//}
+//
+//void callbackTT(const tf::tfMessageConstPtr &expectedMsg,
+//                const tf::tfMessageConstPtr &actualMsg) {
+//    geometry_msgs::TransformStampedPtr etransform = findTf(expectedMsg, expected_tf_frame_id);
+//    geometry_msgs::TransformStampedPtr atransform = findTf(actualMsg, actual_tf_frame_id);
+//    if (etransform) {
+//        if (atransform) {
+//            double expectedTime = etransform->header.stamp.toSec();
+//            double actualTime = atransform->header.stamp.toSec();
+//            tf::Vector3 expectedPos(etransform->transform.translation.x,
+//                                    etransform->transform.translation.y,
+//                                    etransform->transform.translation.z);
+//            tf::Quaternion expectedRot(etransform->transform.rotation.x,
+//                                       etransform->transform.rotation.y,
+//                                       etransform->transform.rotation.z,
+//                                       etransform->transform.rotation.w);
+//            tf::Vector3 actualPos(atransform->transform.translation.x,
+//                                  atransform->transform.translation.y,
+//                                  atransform->transform.translation.z);
+//            tf::Quaternion actualRot(atransform->transform.rotation.x,
+//                                     atransform->transform.rotation.y,
+//                                     atransform->transform.rotation.z,
+//                                     atransform->transform.rotation.w);
+//            handleError(expectedTime, expectedPos, expectedRot, actualTime, actualPos, actualRot);
+//        } else {
+//            ROS_ERROR_STREAM("Cant find frame_id: " << actual_tf_frame_id);
+//        }
+//    } else {
+//        ROS_ERROR_STREAM("Cant find frame_id: " << expected_tf_frame_id);
+//    }
+//}
+
+
+void tfExpCallback(const tf::tfMessage::ConstPtr& msg) {
+    ROS_INFO_STREAM("tfCallback");
+    geometry_msgs::TransformStampedPtr transform = findTf(msg, expected_tf_frame_id);
+    if (transform) {
+        transformExpPub.publish(transform);
+    } else {
+        ROS_ERROR_STREAM("Cant find frame_id: " << expected_tf_frame_id);
+    }
+}
+
+typedef message_filters::sync_policies::ApproximateTime <nav_msgs::Odometry, nav_msgs::Odometry> MySyncPolicyOO;
+//typedef message_filters::sync_policies::ApproximateTime <geometry_msgs::TransformStamped, nav_msgs::Odometry> MySyncPolicyTO;
+
+int main(int argc, char **argv) {
+    ros::init(argc, argv, "odometry_estimator");
+    ros::NodeHandle nodeHandle;
+    ROS_INFO_STREAM("Odometry_estimator is alive");
+
+    ros::NodeHandle local_nh("~");
+//        read params
+    std::string expectedTopic;
+    std::string actualTopic;
+    double agePenalty;
+    std::string outFilePath;
+
+    local_nh.param("expected", expectedTopic, std::string("/expected"));
+    local_nh.param("actual", actualTopic, std::string("/actual"));
+    local_nh.param("age_penalty", agePenalty, 1.0);
+    local_nh.param("out", outFilePath, std::string("/tmp/odometry.csv"));
+
+    bool acTfFl = local_nh.getParam("actual_tf_frame_id", actual_tf_frame_id);
+    bool exTfFl = local_nh.getParam("expected_tf_frame_id", expected_tf_frame_id);
+
+    outFile = std::ofstream(outFilePath);
+    if (outFile.is_open()) {
+        // header
+        outFile << "et,at,epx,epy,epz,eox,eoy,eoz,apx,apy,apz,aox,aoy,aoz\n";
+    } else {
+        ROS_ERROR_STREAM("Unable to open file:" << outFilePath);
+    }
+    //    ROS_DEBUG_STREAM("Args:" << expectedTopic << "," << actualTopic);
+
+//    std::string newExpectedTopic = expectedTopic+"/"+expected_tf_frame_id;
+//    tfExpSub = nodeHandle.subscribe(expectedTopic, 1000, tfExpCallback);
+//    transformExpPub = nodeHandle.advertise<geometry_msgs::TransformStamped>(newExpectedTopic, 1000);
+//
+//    message_filters::Subscriber <geometry_msgs::TransformStamped> subExpected(nodeHandle, newExpectedTopic, 1);
+//    message_filters::Subscriber <nav_msgs::Odometry> subActual(nodeHandle, actualTopic, 1);
+//    message_filters::Synchronizer <MySyncPolicyTO> sync(MySyncPolicyTO(10), subExpected, subActual);
+//    sync.setAgePenalty(agePenalty);
+//    sync.registerCallback(boost::bind(&callbackTO, _1, _2));
+
+
+    message_filters::Subscriber <nav_msgs::Odometry> subExpected(nodeHandle, expectedTopic, 1);
+    message_filters::Subscriber <nav_msgs::Odometry> subActual(nodeHandle, actualTopic, 1);
+    message_filters::Synchronizer <MySyncPolicyOO> sync(MySyncPolicyOO(10), subExpected, subActual);
+    sync.setAgePenalty(agePenalty);
+    sync.registerCallback(boost::bind(&callbackOdometryOdometry, _1, _2));
+
+//    if (!acTfFl && !exTfFl) {
+//        message_filters::Subscriber <nav_msgs::Odometry> subExpected(nodeHandle, expectedTopic, 1);
+//        message_filters::Subscriber <nav_msgs::Odometry> subActual(nodeHandle, actualTopic, 1);
+//        message_filters::Synchronizer <MySyncPolicyOO> sync(MySyncPolicyOO(10), subExpected, subActual);
+//        sync.setAgePenalty(agePenalty);
+//        sync.registerCallback(boost::bind(&callbackOO, _1, _2));
+//    } else if (acTfFl && !exTfFl) {
+//        message_filters::Subscriber <nav_msgs::Odometry> subExpected(nodeHandle, expectedTopic, 1);
+//        message_filters::Subscriber <tf::tfMessageConstPtr> subActual(nodeHandle, actualTopic, 1);
+//        message_filters::Synchronizer <MySyncPolicy> sync(MySyncPolicy(10), subExpected, subActual);
+//        sync.setAgePenalty(agePenalty);
+//        sync.registerCallback(boost::bind(&callbackOT, _1, _2));
+//    } else if (!acTfFl && exTfFl) {
+//        ROS_INFO("!acTfFl && exTfFl");
+//        std::string newExpectedTopic = expectedTopic+"/"+expected_tf_frame_id;
+//        tfExpSub = nodeHandle.subscribe(expectedTopic, 1000, tfExpCallback);
+//        transformExpPub = nodeHandle.advertise<geometry_msgs::TransformStamped>(newExpectedTopic, 1000);
+//
+//        message_filters::Subscriber <geometry_msgs::TransformStamped> subExpected(nodeHandle, expectedTopic, 1);
+//        message_filters::Subscriber <nav_msgs::Odometry> subActual(nodeHandle, actualTopic, 1);
+//        message_filters::Synchronizer <MySyncPolicyTO> sync(MySyncPolicyTO(10), subExpected, subActual);
+//        sync.setAgePenalty(agePenalty);
+//        sync.registerCallback(boost::bind(&callbackTO, _1, _2));
+
+//    } else {
+//        message_filters::Subscriber <tf::tfMessageConstPtr> subExpected(nodeHandle, expectedTopic, 1);
+//        message_filters::Subscriber <tf::tfMessageConstPtr> subActual(nodeHandle, actualTopic, 1);
+//        message_filters::Synchronizer <MySyncPolicy> sync(MySyncPolicy(10), subExpected, subActual);
+//        sync.setAgePenalty(agePenalty);
+//        sync.registerCallback(boost::bind(&callbackTT, _1, _2));
+//    }
+
+    ros::spin();
+    outFile.close();
+    return 0;
+}

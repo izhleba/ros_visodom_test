@@ -1,0 +1,18 @@
+<launch>
+    <node name="rosbag" pkg="rosbag" type="play"  args="--delay=2 /home/izhleba/hdd/ws/slam-constructor/data/rgbd_dataset_freiburg2_pioneer_slam.bag"/>
+
+     <env name="ROSCONSOLE_CONFIG_FILE" value="/home/izhleba/hdd/ws/slam-constructor/exp/launch/rosconsole.conf"/>
+
+    <node name="vis_odometry_test" pkg="vis_odometry_test" type="odom_listener" output="screen">
+        <param name="image" value="/camera/rgb/image_color"/>
+        <param name="info" value="/camera/rgb/camera_info"/>
+        <param name="odometry" value="vis_odometry_out"/>
+    </node>
+
+    <node name="odometry_estimator" pkg="odometry_estimator" type="odometry_estimator" output="screen">
+        <param name="expected" value="/pose"/>
+        <param name="actual" value="/vis_odometry_out"/>
+        <param name="age_penalty" value="1000"/>
+        <param name="out" value="/home/izhleba/hdd/ws/slam-constructor/data/results/rgbd_dataset_freiburg2_pioneer_slam.csv"/>
+    </node>
+</launch>
